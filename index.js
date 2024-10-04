@@ -17,9 +17,9 @@ function loadTable() {
           trHTML += "<tr>";
           trHTML += "<td>" + num + "</td>";
           trHTML += "<td>" + object["Country"] + "</td>";
-          trHTML += "<td>" + object["Date"] + "</td>";
-          trHTML += "<td>" + object["Infected"] + "</td>";
-          trHTML += "<td>" + object["Death"] + "</td>";
+          trHTML += "<td>" + object["Date"] + "</td>"; // Date is already formatted in backend
+          trHTML += "<td>" + object["ConfirmedCases"] + "</td>";
+          trHTML += "<td>" + object["ConfirmedDeaths"] + "</td>";
           trHTML += "<td>";
           trHTML +=
             '<a type="button" class="btn btn-outline-warning mx-1" onclick="showEbolaEditBox(\'' +
@@ -35,7 +35,7 @@ function loadTable() {
         }
         document.getElementById("mytable").innerHTML = trHTML;
 
-        loadGraph(); // เรียกใช้งานฟังก์ชัน loadGraph()
+        loadGraph(); // Load graph function after table is populated
       } else {
         console.error("Error fetching data:", this.statusText);
         document.getElementById("mytable").innerHTML =
@@ -77,9 +77,15 @@ function loadQueryTable() {
             trHTML += "<tr>";
             trHTML += "<td>" + num + "</td>";
             trHTML += "<td>" + object["Country"] + "</td>";
-            trHTML += "<td>" + object["Date"] + "</td>";
-            trHTML += "<td>" + object["Infected"] + "</td>";
-            trHTML += "<td>" + object["Death"] + "</td>";
+            trHTML += "<td>" + object["Date"].split("T")[0] + "</td>"; // เอาวันที่โดยไม่รวมเวลาที่ไม่ต้องการ
+            trHTML +=
+              "<td>" +
+              (object["Cumulative no"][" of confirmed, probable and suspected cases"] || "N/A") +
+              "</td>"; // ข้อมูลจำนวนเคส
+            trHTML +=
+              "<td>" +
+              (object["Cumulative no"][" of confirmed, probable and suspected deaths"] || "N/A") +
+              "</td>"; // ข้อมูลจำนวนผู้เสียชีวิต
             trHTML += "<td>";
             trHTML +=
               '<a type="button" class="btn btn-outline-warning mx-1" onclick="showEbolaEditBox(\'' +
@@ -122,17 +128,17 @@ function loadGraph() {
   const DeathCounts = {};
 
   const xhttp = new XMLHttpRequest();
-  xhttp.open("GET", "http://localhost:3000/ebola/");
-  xhttp.send();
+  xhttp.open("GET", "http://localhost:3000/ebola/", true);
   xhttp.onreadystatechange = function () {
     if (this.readyState === 4) {
       if (this.status === 200) {
         const objects = JSON.parse(this.responseText);
 
+        console.log(objects);
         // นับจำนวนผู้ติดเชื้อและเสียชีวิต
-        objects.forEach((object) => {
-          Infected += parseInt(object.Infected) || 0; // รวมจำนวน Infected จากแต่ละแถว
-          Death += parseInt(object.Death) || 0; // รวมจำนวน Death จากแต่ละแถว
+        objects.forEach(object => {
+          Infected += parseInt(object.ConfirmedCases) || 0;
+          Death += parseInt(object.ConfirmedDeaths) || 0;
         });
 
         // แสดงกราฟวงกลมสำหรับ Infected และ Death
@@ -146,28 +152,23 @@ function loadGraph() {
           title: "Infected vs Death Stats (Total Counts)",
         };
 
-        //เรียกใช้กราฟ PieChart
         const chartTimelyResponse = new google.visualization.PieChart(
           document.getElementById("piechartTimelyResponse")
         );
         chartTimelyResponse.draw(TimelyResponseData, optionsTimelyResponse);
 
         // นับจำนวนผู้ติดเชื้อและเสียชีวิตตามประเทศ
-        objects.forEach((object) => {
-          const country = object.Country; // สมมุติว่า Country เป็น string
-          const infected = parseInt(object.Infected) || 0;
-          const death = parseInt(object.Death) || 0;
+        objects.forEach(object => {
+          const country = object.Country || "Unknown"; // ตั้งชื่อประเทศเป็น Unknown หากไม่พบ
+          const infected = parseInt(object.ConfirmedCases) || 0;
+          const death = parseInt(object.ConfirmedDeaths) || 0;
 
-          // นับจำนวนผู้ติดเชื้อตามประเทศ
           InfectedCounts[country] = (InfectedCounts[country] || 0) + infected;
-          // นับจำนวนผู้เสียชีวิตตามประเทศ
           DeathCounts[country] = (DeathCounts[country] || 0) + death;
         });
 
         // จัดอันดับประเทศตามจำนวนผู้ติดเชื้อ
-        const sortedCountries = Object.entries(InfectedCounts).sort(
-          (a, b) => b[1] - a[1]
-        );
+        const sortedCountries = Object.entries(InfectedCounts).sort((a, b) => b[1] - a[1]);
 
         // แสดงเฉพาะ Liberia, Guinea และ Other
         let Liberia = 0;
@@ -201,10 +202,9 @@ function loadGraph() {
           title: "Infected and Death Stats by Country",
           hAxis: { title: "Country" },
           vAxis: { title: "Count" },
-          isStacked: true, // ถ้าต้องการให้กราฟ stacked
+          isStacked: true,
         };
 
-        //เรียกใช้กราฟ BarChart
         const chart = new google.visualization.BarChart(
           document.getElementById("barchartSubmitted")
         );
@@ -219,65 +219,67 @@ function loadGraph() {
       }
     }
   };
+  xhttp.send();
 }
+
 
 function showEbolaCreateBox() {
   var d = new Date();
-  const date = d.toISOString().split("T")[0];
+  const date = d.toISOString().split("T")[0]; // Default today's date
 
   Swal.fire({
-    title: "Create Patient information",
+    title: "Create Patient Information",
     html:
       '<div class="mb-3"><label for="Country" class="form-label">Country</label>' +
       '<input class="form-control" id="Country" placeholder="Country"></div>' +
       '<div class="mb-3"><label for="Date" class="form-label">Date</label>' +
-      '<input class="form-control" id="Date" placeholder="2024-01-30"></div>' +
+      `<input class="form-control" type="date" id="Date" placeholder="2024-01-30" value="${date}"></div>` + // Pre-fill with today's date
       '<div class="mb-3"><label for="Infected" class="form-label">Cumulative no. of confirmed, probable and suspected cases</label>' +
-      '<input class="form-control" id="Infected" placeholder="9999.9"></div>' +
+      '<input class="form-control" id="Infected" type="number" placeholder="9999"></div>' +
       '<div class="mb-3"><label for="Death" class="form-label">Cumulative no. of confirmed, probable and suspected deaths</label>' +
-      '<input class="form-control" id="Death" placeholder="9999.9"></div>',
+      '<input class="form-control" id="Death" type="number" placeholder="9999"></div>',
     focusConfirm: false,
     preConfirm: () => {
+      // Call the function to create the patient record with the input data
       EbolaCreate();
     },
   });
 }
 
 function EbolaCreate() {
-  const Country = document.getElementById("Country").value;
-  const Date = document.getElementById("Date").value;
-  const Infected = document.getElementById("Infected").value;
-  const Death = document.getElementById("Death").value;
+  const country = document.getElementById("Country").value;
+  const date = document.getElementById("Date").value;
+  const infected = document.getElementById("Infected").value;
+  const death = document.getElementById("Death").value;
 
-  console.log(
-    JSON.stringify({
-      Country: Country,
-      Date: Date,
-      Infected: Infected,
-      Death: Death,
-    })
-  );
+  // Validate input fields
+  if (!country || !date || !infected || !death) {
+    Swal.fire("Error", "All fields are required.", "error");
+    return;
+  }
 
+  const newPatient = {
+    Country: country,
+    Date: date,
+    Infected: parseInt(infected) || null, // ปรับปรุงให้ใช้ค่า infected ตรง ๆ
+    Death: parseInt(death) || null, // ปรับปรุงให้ใช้ค่า death ตรง ๆ
+  };
+
+  // Debugging: log the newPatient object before sending
+  console.log("Sending object:", newPatient);
+
+  // Send the data to the backend via POST request
   const xhttp = new XMLHttpRequest();
-  xhttp.open("POST", "http://localhost:3000/ebola/create");
+  xhttp.open("POST", "http://localhost:3000/ebola/create", true);
   xhttp.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
-  xhttp.send(
-    JSON.stringify({
-      Country: Country,
-      Date: Date,
-      Infected: Infected,
-      Death: Death,
-    })
-  );
+  xhttp.send(JSON.stringify(newPatient));
+
   xhttp.onreadystatechange = function () {
     if (this.readyState == 4 && this.status == 200) {
-      const objects = JSON.parse(this.responseText);
-      Swal.fire(
-        "Good job!",
-        "Create Patient information Successfully!",
-        "success"
-      );
-      loadTable();
+      Swal.fire("Success", "Patient record created successfully.", "success");
+      loadTable(); // Refresh the table to display the new data
+    } else if (this.readyState == 4) {
+      Swal.fire("Error", "Failed to create patient record.", "error");
     }
   };
 }
@@ -322,8 +324,15 @@ function showEbolaEditBox(id) {
     if (this.readyState == 4 && this.status == 200) {
       const object = JSON.parse(this.responseText).object;
       console.log("showEbolaEditBox", object);
+
+      // Ensure that Date is properly formatted
+      const formattedDate = new Date(object["Date"])
+        .toISOString()
+        .split("T")[0];
+
+      // Build the form using the object data
       Swal.fire({
-        title: "Edit Patient information",
+        title: "Edit Patient Information",
         html:
           '<input id="id" class="swal2-input" type="hidden" value="' +
           object["_id"] +
@@ -333,39 +342,56 @@ function showEbolaEditBox(id) {
           object["Country"] +
           '"></div>' +
           '<div class="mb-3"><label for="Date" class="form-label">Date</label>' +
-          '<input class="form-control" id="Date" placeholder="2024-01-30" value="' +
-          object["Date"] +
+          '<input class="form-control" type="date" id="Date" placeholder="2024-01-30" value="' +
+          formattedDate +
           '"></div>' +
-          '<div class="mb-3"><label for="Infected" class="form-label">Infected</label>' +
+          '<div class="mb-3"><label for="Infected" class="form-label">Cumulative no. of confirmed, probable and suspected cases</label>' +
           '<input class="form-control" id="Infected" placeholder="9999.9" value="' +
-          object["Infected"] +
+          object["Cumulative no"][
+            " of confirmed, probable and suspected cases"
+          ] +
           '"></div>' +
-          '<div class="mb-3"><label for="Death" class="form-label">Death</label>' +
+          '<div class="mb-3"><label for="Death" class="form-label">Cumulative no. of confirmed, probable and suspected deaths</label>' +
           '<input class="form-control" id="Death" placeholder="9999.9" value="' +
-          object["Death"] +
+          object["Cumulative no"][
+            " of confirmed, probable and suspected deaths"
+          ] +
           '"></div>',
         focusConfirm: false,
         preConfirm: () => {
-          return userEdit(); // รอให้ userEdit คืนค่าก่อน
+          return EbolaEdit(); // Return the EbolaEdit function
         },
       });
     }
   };
 }
 
-async function userEdit() {
+async function EbolaEdit() {
   const id = document.getElementById("id").value;
   const Country = document.getElementById("Country").value;
   const Date = document.getElementById("Date").value;
   const Infected = document.getElementById("Infected").value;
   const Death = document.getElementById("Death").value;
 
+    // Validate input fields
+    if (!Country || !Date || !Infected || !Death) {
+      Swal.fire("Error", "All fields are required.", "error");
+      return;
+    }
+  
+    const newPatient = {
+      Country: Country,
+      Date: Date,
+      Infected: parseInt(Infected) || null, // ปรับปรุงให้ใช้ค่า infected ตรง ๆ
+      Death: parseInt(Death) || null, // ปรับปรุงให้ใช้ค่า death ตรง ๆ
+    };
+
   const data = {
     _id: id,
     Country: Country,
     Date: Date,
-    Infected: Infected,
-    Death: Death,
+    Infected: parseInt(Infected) || null, // ปรับปรุงให้ใช้ค่า Infected ตรง ๆ
+    Death: parseInt(Death) || null, // ปรับปรุงให้ใช้ค่า Death ตรง ๆ
   };
 
   console.log(JSON.stringify(data));

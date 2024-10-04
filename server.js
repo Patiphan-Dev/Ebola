@@ -15,7 +15,8 @@ app.listen(port, () => {
   console.log(`Example app listening at http://localhost:${port}`);
 });
 
-const uri = "mongodb://adminEbola:passEbola@localhost:27017/?authMechanism=DEFAULT&authSource=EbolaDB";
+const uri =
+  "mongodb://adminEbola:passEbola@localhost:27017/?authMechanism=DEFAULT&authSource=EbolaDB";
 
 const connectDB = async () => {
   try {
@@ -33,36 +34,75 @@ connectDB();
 // Read All API
 app.get("/ebola", async (req, res) => {
   const client = new MongoClient(uri);
-  await client.connect();
-  const objects = await client
-    .db("EbolaDB")
-    .collection("ebola")
-    .find({})
-    .sort({ Date: 1 })
-    .limit(10)
-    .toArray();
-  await client.close();
-  res.status(200).send(objects);
+  try {
+    await client.connect();
+    const objects = await client
+      .db("EbolaDB")
+      .collection("ebola")
+      .find({})
+      .sort({ Date: -1 })
+      .limit(10)
+      .toArray();
+
+    // Transform the objects to extract the nested fields and format the date properly
+    const transformedObjects = objects.map((object) => {
+      return {
+        _id: object._id,
+        Country: object.Country,
+        Date: new Date(object.Date).toISOString().split('T')[0], // Convert MongoDB date to JavaScript Date object
+        ConfirmedCases: object["Cumulative no"][" of confirmed, probable and suspected cases"],
+        ConfirmedDeaths: object["Cumulative no"][" of confirmed, probable and suspected deaths"],
+      };
+    });
+
+    res.status(200).send(transformedObjects);
+  } catch (error) {
+    console.error("Error fetching data from MongoDB:", error);
+    res.status(500).send({ error: "Internal Server Error" });
+  } finally {
+    await client.close();
+  }
 });
+
 
 // Create API
 app.post("/ebola/create", async (req, res) => {
   const object = req.body;
   const client = new MongoClient(uri);
-  await client.connect();
-  await client.db("EbolaDB").collection("ebola").insertOne({
-    Country: object.Country,
-    Date: object.Date,
-    Infected: object.Infected,
-    Death: object.Death,
 
-  });
-  await client.close();
-  res.status(200).send({
-    status: "ok",
-    message: "Ebola is created",
-    Ebola: object,
-  });
+  try {
+    await client.connect();
+
+    // Debugging: log the incoming object
+    console.log("Received object:", object);
+
+    // Insert the new Ebola document with the correct structure
+    await client
+      .db("EbolaDB")
+      .collection("ebola")
+      .insertOne({
+        Country: object.Country,
+        Date: new Date(object.Date), // Ensure Date is stored as a proper Date object
+        "Cumulative no": {
+          " of confirmed, probable and suspected cases": object.Infected,
+          " of confirmed, probable and suspected deaths": object.Death,
+        },
+      });
+
+    res.status(200).send({
+      status: "ok",
+      message: "Ebola record is created",
+      Ebola: object,
+    });
+  } catch (error) {
+    console.error("Error creating Ebola record:", error);
+    res.status(500).send({
+      status: "error",
+      message: "Failed to create Ebola record",
+    });
+  } finally {
+    await client.close();
+  }
 });
 
 // Update API
@@ -78,7 +118,7 @@ app.put("/ebola/update", async (req, res) => {
 
   try {
     await client.connect();
-    
+
     const result = await client
       .db("EbolaDB")
       .collection("ebola")
@@ -88,15 +128,21 @@ app.put("/ebola/update", async (req, res) => {
           $set: {
             Country: object.Country,
             Date: object.Date,
-            Infected: object.Infected,
-            Death: object.Death,
-
+            "Cumulative no": {
+              " of confirmed, probable and suspected cases": object.Infected,
+              " of confirmed, probable and suspected deaths": object.Death,
+            },
           },
         }
       );
 
     if (result.modifiedCount === 0) {
-      return res.status(404).send({ status: "error", message: "Ebola not found or no changes made" });
+      return res
+        .status(404)
+        .send({
+          status: "error",
+          message: "Ebola not found or no changes made",
+        });
     }
 
     res.status(200).send({
@@ -156,7 +202,6 @@ app.delete("/ebola/delete", async (req, res) => {
   }
 });
 
-
 // Read Limit API
 app.get("/ebola/limit", async (req, res) => {
   const client = new MongoClient(uri);
@@ -165,7 +210,7 @@ app.get("/ebola/limit", async (req, res) => {
     .db("EbolaDB")
     .collection("ebola")
     .find({})
-    .sort({ Date: 1 })
+    .sort({ Date: -1 })
     .limit(10000)
     .toArray();
   await client.close();
@@ -182,7 +227,7 @@ app.get("/ebola/:id", async (req, res) => {
   }
 
   const client = new MongoClient(uri);
-  
+
   try {
     await client.connect();
     const object = await client
@@ -191,7 +236,9 @@ app.get("/ebola/:id", async (req, res) => {
       .findOne({ _id: new ObjectId(id) });
 
     if (!object) {
-      return res.status(404).send({ status: "error", message: "Ebola not found" });
+      return res
+        .status(404)
+        .send({ status: "error", message: "Ebola not found" });
     }
 
     res.status(200).send({
@@ -242,5 +289,3 @@ app.get("/ebola/country/:searchText", async (req, res) => {
     await client.close();
   }
 });
-
-
