@@ -16,7 +16,7 @@ app.listen(port, () => {
 });
 
 const uri =
-  "mongodb://adminEbola:passEbola@localhost:27017/?authMechanism=DEFAULT&authSource=EbolaDB";
+  "mongodb://localhost:27017/?authMechanism=DEFAULT&authSource=EbolaDB";
 
 const connectDB = async () => {
   try {
