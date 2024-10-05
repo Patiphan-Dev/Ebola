@@ -141,7 +141,7 @@ function loadGraph() {
           Death += parseInt(object.ConfirmedDeaths) || 0;
         });
 
-        // แสดงกราฟวงกลมสำหรับ Infected และ Death
+        // แสดงกราฟ Donut สำหรับ Infected และ Death
         const TimelyResponseData = google.visualization.arrayToDataTable([
           ["Status", "Count"],
           ["Infected", Infected],
@@ -150,6 +150,7 @@ function loadGraph() {
 
         const optionsTimelyResponse = {
           title: "Infected vs Death Stats (Total Counts)",
+          pieHole: 0.4, // เพิ่ม pieHole เพื่อทำให้เป็น Donut Chart
         };
 
         const chartTimelyResponse = new google.visualization.PieChart(
@@ -195,7 +196,7 @@ function loadGraph() {
           ["Other", OtherInfected, OtherDeath],
         ];
 
-        // แสดง BarChart
+        // แสดง ColumnChart แทน BarChart แนวนอน
         const data = google.visualization.arrayToDataTable(barChartData);
 
         const options = {
@@ -205,7 +206,7 @@ function loadGraph() {
           isStacked: true,
         };
 
-        const chart = new google.visualization.BarChart(
+        const chart = new google.visualization.ColumnChart(
           document.getElementById("barchartSubmitted")
         );
         chart.draw(data, options);
